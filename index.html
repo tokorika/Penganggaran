@@ -325,12 +325,20 @@
     <script type="module">
         // Import Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Configuration (from your Firebase project settings)
-        // ** IMPORTANT: Replace with your actual Firebase config **
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // ** PENTING: Ganti dengan konfigurasi Firebase Anda yang sebenarnya! **
+        // Anda bisa mendapatkan ini dari Firebase Console -> Project settings -> Your apps -> Firebase SDK snippet -> Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAwsd4d1eZj4Ky2xdpoggTyMUBB63J8yP8",
+            authDomain: "penganggaran-cf13e.firebaseapp.com",
+            projectId: "penganggaran-cf13e",
+            storageBucket: "penganggaran-cf13e.firebasestorage.app",
+            messagingSenderId: "548088041588",
+            appId: "1:548088041588:web:a960a86ac65884acd20121"
+        };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -538,8 +546,11 @@
                 return;
             }
 
+            // Gunakan ID aplikasi statis karena __app_id tidak tersedia di luar Canvas
+            const appId = 'budgeting-app'; // Anda bisa mengubah ini jika ingin nama aplikasi yang berbeda di Firestore
+
             // Path collection untuk pengguna saat ini
-            const userTransactionsColRef = collection(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`);
+            const userTransactionsColRef = collection(db, `artifacts/${appId}/users/${currentUser.uid}/transactions`);
             
             // Menggunakan onSnapshot untuk mendapatkan pembaruan real-time
             unsubscribeFromTransactions = onSnapshot(userTransactionsColRef, (snapshot) => {
@@ -583,13 +594,16 @@
                 createdAt: new Date().toISOString() // Timestamp untuk sort/history
             };
 
+            // Gunakan ID aplikasi statis karena __app_id tidak tersedia di luar Canvas
+            const appId = 'budgeting-app';
+
             try {
                 if (editingTransactionId) {
-                    const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, editingTransactionId);
+                    const transactionRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}/transactions`, editingTransactionId);
                     await updateDoc(transactionRef, transactionData);
                     showMessage('Transaksi berhasil diperbarui!', 'success');
                 } else {
-                    await addDoc(collection(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`), transactionData);
+                    await addDoc(collection(db, `artifacts/${appId}/users/${currentUser.uid}/transactions`), transactionData);
                     showMessage('Transaksi berhasil ditambahkan!', 'success');
                 }
                 hideAddEditTransactionModal();
@@ -608,8 +622,11 @@
                 showMessage('Silakan login untuk menghapus transaksi.', 'error');
                 return;
             }
+            // Gunakan ID aplikasi statis karena __app_id tidak tersedia di luar Canvas
+            const appId = 'budgeting-app';
+
             try {
-                const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, transactionIdToDelete);
+                const transactionRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}/transactions`, transactionIdToDelete);
                 await deleteDoc(transactionRef);
                 showMessage('Transaksi berhasil dihapus!', 'success');
             } catch (error) {
@@ -634,9 +651,12 @@
             // Tampilkan pesan konfirmasi (menggunakan showMessage sebagai pengganti alert)
             showMessage('Menghapus transaksi terpilih...', 'success');
 
+            // Gunakan ID aplikasi statis karena __app_id tidak tersedia di luar Canvas
+            const appId = 'budgeting-app';
+
             try {
                 const deletePromises = selectedTransactions.map(id => {
-                    const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, id);
+                    const transactionRef = doc(db, `artifacts/${appId}/users/${currentUser.uid}/transactions`, id);
                     return deleteDoc(transactionRef);
                 });
                 await Promise.all(deletePromises);
@@ -1124,23 +1144,10 @@
         logoutButton.addEventListener('click', signOutUser);
 
         // Listen for auth state changes
-        onAuthStateChanged(auth, async (user) => {
-            if (typeof __initial_auth_token !== 'undefined') {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                    handleAuthStateChanged(user);
-                } catch (error) {
-                    console.error("Error signing in with custom token:", error);
-                    // Fallback to anonymous or just handle auth state
-                    handleAuthStateChanged(user);
-                }
-            } else {
-                // If no custom token, sign in anonymously if no user is logged in
-                if (!user) {
-                    await signInAnonymously(auth);
-                }
-                handleAuthStateChanged(user);
-            }
+        onAuthStateChanged(auth, (user) => {
+            // Logika signInAnonymously dan signInWithCustomToken dihapus
+            // karena tidak relevan saat berjalan di luar lingkungan Canvas.
+            handleAuthStateChanged(user);
         });
         
         // --- Fungsi Inisialisasi Aplikasi ---
