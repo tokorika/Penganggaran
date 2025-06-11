@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Penganggaran</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx.js) untuk membaca/menulis Excel (.xlsx) -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%; /* Memastikan html dan body mengambil tinggi penuh */
+        }
+        body {
+            font-family: 'Inter', sans-serif; /* Menggunakan font Inter */
+        }
+        /* Custom checkbox styling for multi-select (square) */
+        input[type="checkbox"].transaction-select-checkbox {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border: 2px solid #ccc;
+            border-radius: 4px; /* Persegi */
+            cursor: pointer;
+            position: relative;
+            top: 2px;
+            transition: all 0.2s ease-in-out;
+            flex-shrink: 0; /* Ensures checkbox doesn't shrink */
+        }
+
+        input[type="checkbox"].transaction-select-checkbox:checked {
+            background-color: #3b82f6; /* Biru-500 */
+            border-color: #3b82f6;
+        }
+
+        input[type="checkbox"].transaction-select-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        /* Custom scrollbar styling (optional, for better aesthetics) */
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Custom CSS to remove outlines and insertion points for non-input elements */
+        /* Remove outline for all elements by default */
+        *:focus {
+            outline: none;
+        }
+        /* Hide caret for non-input elements */
+        body {
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+ */
+            user-select: none; /* Standard syntax */
+        }
+        /* Allow text selection and caret for specific input types and textareas */
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="time"],
+        textarea {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+        /* Add outline back specifically for text inputs and textareas on focus */
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="date"]:focus,
+        input[type="time"]:focus,
+        textarea:focus {
+            outline: 2px solid #3b82f6; /* Blue outline for focus */
+            outline-offset: 2px; /* Offset the outline slightly */
+        }
+    </style>
+</head>
+<!-- Body uses responsive classes for full height and content alignment in the center -->
+<body class="bg-gradient-to-br from-blue-400 to-purple-600 h-screen flex items-center justify-center p-4 relative">
+
+    <!-- Main application container with fixed height and hidden overflow -->
+    <!-- 'w-full' class ensures full width on all devices, 'max-w-5xl' limits width on large screens. -->
+    <!-- 'mx-auto' centers the container. 'h-[90vh]' sets height to 90% of viewport height. -->
+    <!-- 'overflow-hidden' on the main container prevents page scrollbars from appearing from content within it. -->
+    <!-- 'p-4' on the body provides overall padding to ensure no content sticks to the screen edges. -->
+    <!-- 'p-0' padding on the main container, internal padding will be managed by #budgetView -->
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl mx-auto flex h-[90vh] transform transition-all duration-300 hover:scale-105 overflow-hidden p-0">
+        <!-- Flex container for main content area, ensures full height -->
+        <div class="flex-grow flex relative h-full">
+            <!-- Budget View -->
+            <!-- Padding managed here: 'p-4' for mobile, 'sm:p-8' for larger screens -->
+            <div id="budgetView" class="flex-grow flex flex-col h-full p-4 sm:p-8"> 
+                <!-- Adjusting main title font size for smaller screens -->
+                <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 flex-shrink-0">Penganggaran</h2>
+                <div class="bg-blue-100 p-6 rounded-xl shadow-md mb-6 flex-shrink-0">
+                    <!-- Adjusting balance text sizes for smaller screens -->
+                    <p class="text-lg sm:text-xl text-gray-700 mb-2">Saldo Saat Ini:</p>
+                    <p id="currentBalance" class="text-4xl sm:text-5xl font-bold text-blue-800">Rp 0</p>
+                </div>
+
+                <!-- Auth UI -->
+                <div id="authSection" class="flex flex-col sm:flex-row justify-between items-center gap-2 mb-4 flex-shrink-0">
+                    <div id="userInfo" class="flex items-center gap-2 hidden">
+                        <img id="userPhoto" class="w-8 h-8 rounded-full" src="" alt="User Photo">
+                        <span id="userName" class="text-gray-700 text-sm font-medium"></span>
+                        <span id="userIdDisplay" class="text-gray-500 text-xs truncate" title="User ID"></span>
+                    </div>
+                    <button id="loginButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:-translate-y-1 active:scale-95 w-full sm:w-auto text-sm">
+                        Login dengan Google
+                    </button>
+                    <button id="logoutButton" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:-translate-y-1 active:scale-95 w-full sm:w-auto text-sm hidden">
+                        Logout
+                    </button>
+                </div>
+
+                <!-- Button container: 'flex-wrap' to break lines on small screens, 'gap-2' for spacing between buttons -->
+                <!-- On small screens, buttons will take full width, and on larger screens they will be side-by-side -->
+                <div class="flex flex-col sm:flex-row justify-end gap-2 mb-4 flex-shrink-0">
+                    <button id="exportBudgetButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:-translate-y-1 active:scale-95 w-full sm:w-auto text-sm">
+                        Export ke Excel
+                    </button>
+                    <button id="addTransactionButton" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:-translate-y-1 active:scale-95 w-full sm:w-auto text-sm">
+                        Tambah Transaksi
+                    </button>
+                </div>
+
+                <!-- BEGIN REVISED STRUCTURE FOR FIXED C AND SCROLLABLE X -->
+                <!-- This div will manage the remaining height and act as a column flex container -->
+                <div class="flex-grow flex flex-col"> 
+                    <!-- Area C (Fixed part - now natural flow) -->
+                    <!-- 'flex-shrink-0' prevents this element from shrinking and ensures its height remains. -->
+                    <!-- Adding horizontal padding here instead of inheriting from parent to ensure consistent spacing -->
+                    <div id="fixedTransactionControls" class="bg-white pb-0 flex-shrink-0 px-2 sm:px-0">
+                        <!-- Search Input for Transactions -->
+                        <!-- 'w-full' ensures the input takes full available width. -->
+                        <input
+                            type="text"
+                            id="transactionSearchInput"
+                            placeholder="Cari transaksi..."
+                            class="w-full p-2 border border-gray-300 rounded-lg text-gray-700 mb-4 text-sm"
+                            aria-label="Cari transaksi"
+                        >
+
+                        <!-- Multi-select and Delete for Transactions -->
+                        <!-- Adjusted to stack vertically on small screens and use gap-2 -->
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
+                            <label class="flex items-center cursor-pointer w-full sm:w-auto">
+                                <input type="checkbox" id="selectAllTransactionsCheckbox" class="transaction-select-checkbox h-5 w-5 rounded">
+                                <span class="ml-2 text-gray-700 text-sm">Pilih Semua</span>
+                            </label>
+                            <!-- Adjusted button to take full width on small screens -->
+                            <button id="deleteSelectedTransactionsButton" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto text-sm">
+                                Hapus Terpilih
+                            </button>
+                        </div>
+                        <!-- Adjusting title font size for smaller screens -->
+                        <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-3">Histori Transaksi</h3>
+                    </div>
+
+                    <!-- Area X (Scrollable part - now flex-grow and h-0) -->
+                    <!-- 'overflow-y-auto' enables vertical scrolling. 'flex-grow' ensures this part takes the remaining available space. -->
+                    <!-- 'h-0' is important in a flex-col context for 'flex-grow' to work correctly, as it defines the base height before growing. -->
+                    <!-- Adding horizontal padding here instead of inheriting from parent to ensure consistent spacing -->
+                    <div id="scrollableTransactionList" class="overflow-y-auto flex-grow h-0 pt-0 px-2 sm:px-0">
+                        <ul id="transactionList" class="space-y-3">
+                            <!-- Transaction items will be rendered here by JavaScript -->
+                            <!-- Mengurangi padding horizontal pada item list dan ukuran fontnya -->
+                        </ul>
+                        <p id="noTransactionsMessage" class="text-gray-500 text-center mt-8 hidden"></p>
+                    </div>
+                </div>
+                <!-- END REVISED STRUCTURE -->
+            </div>
+
+            <!-- Modals (Remain outside the main view for proper overlay) -->
+            <!-- Modals use 'fixed inset-0' to cover the entire screen, 'flex items-center justify-center' for centering. -->
+            <!-- Modal content uses 'max-w-sm' to limit width on large screens and 'mx-auto' for centering. -->
+            <!-- Adjusted padding for modal content for smaller screens -->
+            <div id="addEditTransactionModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-[101] modal">
+                <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-sm mx-auto">
+                    <!-- Adjusted modal title font size -->
+                    <h3 id="transactionModalTitle" class="text-xl sm:text-2xl font-bold text-gray-800 mb-6">Tambah Transaksi</h3>
+                    <!-- Adjusted input/select padding and font size for smaller screens -->
+                    <select id="transactionTypeInput" class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 mb-4 text-sm sm:text-base" aria-label="Jenis transaksi">
+                        <option value="income">Pemasukan</option>
+                        <option value="expense">Pengeluaran</option>
+                    </select>
+                    <input
+                        type="number"
+                        id="transactionAmountInput"
+                        placeholder="Jumlah (Rp)"
+                        class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 mb-4 text-sm sm:text-base"
+                        aria-label="Jumlah transaksi"
+                        step="0.01"
+                        min="0"
+                    >
+                    <input
+                        type="text"
+                        id="transactionDescriptionInput"
+                        placeholder="Deskripsi (misal: Gaji, Belanja Makanan)"
+                        class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 mb-4 text-sm sm:text-base"
+                        aria-label="Deskripsi transaksi"
+                    >
+                    <input
+                        type="date"
+                        id="transactionDateInput"
+                        class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 mb-6 text-sm sm:text-base"
+                        aria-label="Tanggal transaksi"
+                    >
+                    <div class="flex justify-end space-x-3">
+                        <!-- Adjusted button font size for modals -->
+                        <button id="cancelTransactionButton" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-all duration-200 text-sm">Batal</button>
+                        <button id="confirmTransactionButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 text-sm">Simpan</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Budget Modal - Updated for Date Range -->
+            <div id="exportBudgetModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center hidden z-[101] modal">
+                <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-md mx-auto">
+                    <!-- Adjusted modal title font size -->
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-800 mb-6">Pilih Rentang Tanggal untuk Ekspor</h3>
+                    
+                    <div class="mb-4">
+                        <label for="exportStartDateInput" class="block text-gray-700 text-sm font-semibold mb-2">Tanggal Mulai:</label>
+                        <!-- Adjusted input padding and font size for smaller screens -->
+                        <input
+                            type="date"
+                            id="exportStartDateInput"
+                            class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 text-sm sm:text-base"
+                            aria-label="Tanggal mulai ekspor"
+                        >
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="exportEndDateInput" class="block text-gray-700 text-sm font-semibold mb-2">Tanggal Akhir:</label>
+                        <!-- Adjusted input padding and font size for smaller screens -->
+                        <input
+                            type="date"
+                            id="exportEndDateInput"
+                            class="w-full p-2 sm:p-3 border border-gray-300 rounded-lg text-gray-700 text-sm sm:text-base"
+                            aria-label="Tanggal akhir ekspor"
+                        >
+                    </div>
+
+                    <div class="flex justify-end space-x-3">
+                        <!-- Adjusted button font size for modals -->
+                        <button id="cancelExportButton" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-all duration-200 text-sm">Batal</button>
+                        <button id="confirmExportButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 text-sm">Ekspor</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Adjusted message box font size -->
+            <div id="messageBox" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-red-600 text-white py-3 px-6 rounded-lg shadow-lg text-center opacity-0 transition-opacity duration-300 pointer-events-none text-sm" style="z-index: 1000;">
+                Pesan Anda di sini!
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration (from your Firebase project settings)
+        // ** IMPORTANT: Replace with your actual Firebase config **
+        const firebaseConfig = JSON.parse(__firebase_config);
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Global variables for user and budget data
+        let currentUser = null;
+        let budgetTransactions = []; // Stores all budget transactions for the current user
+        let unsubscribeFromTransactions = null; // To manage Firestore snapshot listener
+
+        // --- Referensi Elemen DOM ---
+        const budgetView = document.getElementById('budgetView');
+        const currentBalance = document.getElementById('currentBalance');
+        const addTransactionButton = document.getElementById('addTransactionButton');
+        const transactionList = document.getElementById('transactionList');
+        const noTransactionsMessage = document.getElementById('noTransactionsMessage');
+        
+        // Elemen setelah restrukturisasi
+        const fixedTransactionControls = document.getElementById('fixedTransactionControls');
+        const scrollableTransactionList = document.getElementById('scrollableTransactionList');
+
+        const messageBox = document.getElementById('messageBox');
+
+        // Modals
+        const addEditTransactionModal = document.getElementById('addEditTransactionModal');
+        const transactionModalTitle = document.getElementById('transactionModalTitle');
+        const transactionTypeInput = document.getElementById('transactionTypeInput');
+        const transactionAmountInput = document.getElementById('transactionAmountInput');
+        const transactionDescriptionInput = document.getElementById('transactionDescriptionInput');
+        const transactionDateInput = document.getElementById('transactionDateInput');
+        const cancelTransactionButton = document.getElementById('cancelTransactionButton');
+        const confirmTransactionButton = document.getElementById('confirmTransactionButton');
+
+        // Referensi untuk elemen yang dipindahkan ke dalam fixedTransactionControls
+        const transactionSearchInput = fixedTransactionControls.querySelector('#transactionSearchInput');
+        const selectAllTransactionsCheckbox = fixedTransactionControls.querySelector('#selectAllTransactionsCheckbox'); 
+        const deleteSelectedTransactionsButton = fixedTransactionControls.querySelector('#deleteSelectedTransactionsButton');
+
+        // Export elements (reverted)
+        const exportBudgetButton = document.getElementById('exportBudgetButton');
+        const exportBudgetModal = document.getElementById('exportBudgetModal');
+        const exportStartDateInput = document.getElementById('exportStartDateInput');
+        const exportEndDateInput = document.getElementById('exportEndDateInput');
+        const cancelExportButton = document.getElementById('cancelExportButton');
+        const confirmExportButton = document.getElementById('confirmExportButton');
+
+        // Auth UI elements
+        const loginButton = document.getElementById('loginButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const userInfo = document.getElementById('userInfo');
+        const userPhoto = document.getElementById('userPhoto');
+        const userName = document.getElementById('userName');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+
+
+        // --- Global State ---
+        let editingTransactionId = null; // For editing transactions
+
+        // Multi-select status
+        let selectedTransactions = []; // Stores transaction IDs
+
+        // --- Utility Functions ---
+
+        /**
+         * Menampilkan pesan sementara di layar.
+         * @param {string} message - Pesan yang akan ditampilkan.
+         * @param {string} type - Jenis pesan ('success' atau 'error').
+         */
+        function showMessage(message, type = 'error') {
+            messageBox.textContent = message;
+            if (type === 'error') {
+                messageBox.classList.remove('bg-green-600');
+                messageBox.classList.add('bg-red-600');
+            } else {
+                messageBox.classList.remove('bg-red-600');
+                messageBox.classList.add('bg-green-600');
+            }
+            messageBox.classList.remove('opacity-0', 'pointer-events-none');
+            messageBox.classList.add('opacity-100');
+
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        /**
+         * Menggenerasi ID unik (untuk transaksi lokal sebelum disimpan ke Firestore).
+         * @returns {string} ID unik.
+         */
+        function generateUniqueId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        /**
+         * Memformat angka menjadi format mata uang Rupiah.
+         * @param {number} amount - Jumlah angka.
+         * @returns {string} String format mata uang.
+         */
+        function formatRupiah(amount) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(amount);
+        }
+
+        /**
+         * Mengonversi string tanggal (YYYY-MM-DD) ke tanggal Indonesia yang mudah dibaca.
+         * @param {string} dateString - String tanggal dalam format यथा-MM-DD.
+         * @returns {string} String tanggal yang mudah dibaca.
+         */
+        function getReadableDate(dateString) {
+            if (!dateString) return '';
+            return new Date(dateString).toLocaleDateString('id-ID', {
+                year: 'numeric', month: 'long', day: 'numeric'
+            });
+        }
+
+        /**
+         * Memformat objek Date ke string यथा-MM-DD.
+         * @param {Date} dateObj - Objek Date.
+         * @returns {string} Tanggal dalam format यथा-MM-DD.
+         */
+        function formatDateToYYYYMMDD(dateObj) {
+            const year = dateObj.getFullYear();
+            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const day = dateObj.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // --- Firebase Authentication Functions ---
+
+        /**
+         * Melakukan login dengan Google.
+         */
+        async function signInWithGoogle() {
+            try {
+                const provider = new GoogleAuthProvider();
+                await signInWithPopup(auth, provider);
+                showMessage('Login berhasil!', 'success');
+            } catch (error) {
+                console.error("Error during Google Sign-in:", error);
+                showMessage('Gagal login dengan Google: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Melakukan logout.
+         */
+        async function signOutUser() {
+            try {
+                await signOut(auth);
+                showMessage('Logout berhasil!', 'success');
+            } catch (error) {
+                console.error("Error during sign out:", error);
+                showMessage('Gagal logout: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Mengelola perubahan status autentikasi.
+         * @param {firebase.User} user - Objek pengguna Firebase.
+         */
+        function handleAuthStateChanged(user) {
+            currentUser = user;
+            if (unsubscribeFromTransactions) {
+                unsubscribeFromTransactions(); // Unsubscribe from previous listener
+            }
+
+            if (currentUser) {
+                console.log("User logged in:", currentUser.uid);
+                userInfo.classList.remove('hidden');
+                loginButton.classList.add('hidden');
+                logoutButton.classList.remove('hidden');
+                userName.textContent = currentUser.displayName || 'Pengguna';
+                userPhoto.src = currentUser.photoURL || 'https://placehold.co/40x40/cccccc/ffffff?text=User'; // Placeholder
+                userIdDisplay.textContent = `ID: ${currentUser.uid}`;
+                loadTransactionsFromFirestore(); // Load user-specific transactions
+            } else {
+                console.log("User logged out or not authenticated.");
+                userInfo.classList.add('hidden');
+                loginButton.classList.remove('hidden');
+                logoutButton.classList.add('hidden');
+                budgetTransactions = []; // Clear transactions if no user
+                renderBudget(); // Update UI
+                noTransactionsMessage.textContent = 'Silakan login untuk melihat dan mengelola transaksi Anda.';
+                noTransactionsMessage.classList.remove('hidden');
+            }
+        }
+
+        // --- Firebase Firestore Functions ---
+
+        /**
+         * Memuat transaksi pengguna dari Firestore secara real-time.
+         */
+        function loadTransactionsFromFirestore() {
+            if (!currentUser) {
+                budgetTransactions = [];
+                renderBudget();
+                return;
+            }
+
+            // Path collection untuk pengguna saat ini
+            const userTransactionsColRef = collection(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`);
+            
+            // Menggunakan onSnapshot untuk mendapatkan pembaruan real-time
+            unsubscribeFromTransactions = onSnapshot(userTransactionsColRef, (snapshot) => {
+                const transactions = [];
+                snapshot.forEach(doc => {
+                    transactions.push({ id: doc.id, ...doc.data() });
+                });
+                budgetTransactions = transactions;
+                renderBudget(); // Render ulang tampilan setiap kali ada perubahan
+                showMessage('Data transaksi diperbarui.', 'success');
+            }, (error) => {
+                console.error("Error fetching transactions:", error);
+                showMessage('Gagal memuat transaksi: ' + error.message, 'error');
+            });
+        }
+
+        /**
+         * Menyimpan transaksi baru atau mengedit transaksi yang sudah ada ke Firestore.
+         */
+        async function saveTransactionToFirestore() {
+            if (!currentUser) {
+                showMessage('Silakan login untuk menyimpan transaksi.', 'error');
+                return;
+            }
+
+            const type = transactionTypeInput.value;
+            const amount = parseFloat(transactionAmountInput.value);
+            const description = transactionDescriptionInput.value.trim();
+            const date = transactionDateInput.value;
+
+            if (isNaN(amount) || amount <= 0 || description === '' || date === '') {
+                showMessage('Jumlah, deskripsi, dan tanggal transaksi harus diisi dengan benar!', 'error');
+                return;
+            }
+
+            const transactionData = {
+                type: type,
+                amount: amount,
+                description: description,
+                date: date,
+                createdAt: new Date().toISOString() // Timestamp untuk sort/history
+            };
+
+            try {
+                if (editingTransactionId) {
+                    const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, editingTransactionId);
+                    await updateDoc(transactionRef, transactionData);
+                    showMessage('Transaksi berhasil diperbarui!', 'success');
+                } else {
+                    await addDoc(collection(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`), transactionData);
+                    showMessage('Transaksi berhasil ditambahkan!', 'success');
+                }
+                hideAddEditTransactionModal();
+            } catch (error) {
+                console.error("Error saving transaction:", error);
+                showMessage('Gagal menyimpan transaksi: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Menghapus transaksi dari Firestore.
+         * @param {string} transactionIdToDelete - ID transaksi yang akan dihapus.
+         */
+        async function deleteTransactionFromFirestore(transactionIdToDelete) {
+            if (!currentUser) {
+                showMessage('Silakan login untuk menghapus transaksi.', 'error');
+                return;
+            }
+            try {
+                const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, transactionIdToDelete);
+                await deleteDoc(transactionRef);
+                showMessage('Transaksi berhasil dihapus!', 'success');
+            } catch (error) {
+                console.error("Error deleting transaction:", error);
+                showMessage('Gagal menghapus transaksi: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Menghapus semua transaksi yang dipilih dari Firestore.
+         */
+        async function deleteSelectedTransactionsFromFirestore() {
+            if (!currentUser) {
+                showMessage('Silakan login untuk menghapus transaksi.', 'error');
+                return;
+            }
+            if (selectedTransactions.length === 0) {
+                showMessage('Tidak ada transaksi yang dipilih untuk dihapus.', 'error');
+                return;
+            }
+
+            // Tampilkan pesan konfirmasi (menggunakan showMessage sebagai pengganti alert)
+            showMessage('Menghapus transaksi terpilih...', 'success');
+
+            try {
+                const deletePromises = selectedTransactions.map(id => {
+                    const transactionRef = doc(db, `artifacts/${__app_id}/users/${currentUser.uid}/transactions`, id);
+                    return deleteDoc(transactionRef);
+                });
+                await Promise.all(deletePromises);
+                selectedTransactions = []; // Clear selected after successful deletion
+                showMessage('Transaksi berhasil dihapus!', 'success');
+            } catch (error) {
+                console.error("Error deleting selected transactions:", error);
+                showMessage('Gagal menghapus transaksi terpilih: ' + error.message, 'error');
+            }
+        }
+
+        // --- Fungsi Fitur Anggaran (Budgeting) ---
+
+        /**
+         * Menghitung total saldo dari transaksi.
+         * @returns {number} Total saldo.
+         */
+        function calculateBalance() {
+            return budgetTransactions.reduce((total, transaction) => {
+                return transaction.type === 'income' ? total + transaction.amount : total - transaction.amount;
+            }, 0);
+        }
+
+        /**
+         * Merender daftar transaksi dan memperbarui saldo.
+         */
+        function renderBudget() {
+            transactionList.innerHTML = '';
+            const balance = calculateBalance();
+            currentBalance.textContent = formatRupiah(balance);
+
+            const searchTerm = transactionSearchInput.value.toLowerCase();
+
+            const filteredTransactions = budgetTransactions.filter(transaction =>
+                transaction.description.toLowerCase().includes(searchTerm)
+            ).sort((a, b) => new Date(b.date) - new Date(a.date)); // Urutkan berdasarkan tanggal, terbaru pertama
+
+            if (filteredTransactions.length === 0) {
+                noTransactionsMessage.classList.remove('hidden');
+                noTransactionsMessage.textContent = currentUser ? 'Tidak ada transaksi yang cocok.' : 'Silakan login untuk melihat dan mengelola transaksi Anda.';
+            } else {
+                noTransactionsMessage.classList.add('hidden');
+                filteredTransactions.forEach(transaction => {
+                    const listItem = createTransactionElement(transaction);
+                    transactionList.appendChild(listItem);
+                });
+            }
+            updateDeleteSelectedTransactionsButton();
+            updateSelectAllTransactionsCheckbox();
+        }
+
+        /**
+         * Handler untuk kotak centang transaksi individual (untuk multi-pilih).
+         */
+        function handleTransactionCheckboxChange(event) {
+            const checkbox = event.target;
+            const transactionId = checkbox.dataset.transactionId;
+
+            if (checkbox.checked) {
+                selectedTransactions.push(transactionId);
+            } else {
+                selectedTransactions = selectedTransactions.filter(id => id !== transactionId);
+            }
+            updateDeleteSelectedTransactionsButton();
+            updateSelectAllTransactionsCheckbox();
+        }
+
+        /**
+         * Memperbarui status tombol "Hapus Transaksi Terpilih".
+         */
+        function updateDeleteSelectedTransactionsButton() {
+            deleteSelectedTransactionsButton.disabled = selectedTransactions.length === 0;
+        }
+
+        /**
+         * Memperbarui status kotak centang "Pilih Semua Transaksi".
+         */
+        function updateSelectAllTransactionsCheckbox() {
+            const searchTerm = transactionSearchInput.value.toLowerCase();
+            const currentFilteredTransactions = budgetTransactions.filter(transaction =>
+                transaction.description.toLowerCase().includes(searchTerm)
+            );
+
+            if (currentFilteredTransactions.length > 0) {
+                const allTransactionsSelected = currentFilteredTransactions.every(transaction =>
+                    selectedTransactions.includes(transaction.id)
+                );
+                selectAllTransactionsCheckbox.checked = allTransactionsSelected;
+            } else {
+                selectAllTransactionsCheckbox.checked = false;
+            }
+        }
+
+        /**
+         * Mengaktifkan/menonaktifkan pilihan semua transaksi.
+         * @param {boolean} isChecked - True untuk memilih semua, false untuk membatalkan pilihan semua.
+         */
+        function toggleAllTransactions(isChecked) {
+            const searchTerm = transactionSearchInput.value.toLowerCase();
+            const visibleTransactions = budgetTransactions.filter(transaction =>
+                transaction.description.toLowerCase().includes(searchTerm)
+            );
+            
+            selectedTransactions = [];
+            if (isChecked) {
+                visibleTransactions.forEach(transaction => selectedTransactions.push(transaction.id));
+            }
+            renderBudget(); // Render ulang untuk memperbarui kotak centang
+            updateDeleteSelectedTransactionsButton();
+        }
+
+        /**
+         * Membuat elemen DOM untuk satu transaksi.
+         * @param {object} transactionData - Objek transaksi.
+         * @returns {HTMLElement} Elemen li transaksi.
+         */
+        function createTransactionElement(transactionData) {
+            const listItem = document.createElement('li');
+            const typeClass = transactionData.type === 'income' ? 'text-green-600' : 'text-red-600';
+            const sign = transactionData.type === 'income' ? '+' : ''; // Hanya tambahkan '+' untuk pemasukan, '-' akan ditangani oleh nilai negatif atau kelas
+
+            // Mengurangi padding horizontal pada item list untuk tampilan mobile
+            // Menggunakan `px-1` untuk mobile (320px), `sm:px-4` untuk layar lebih besar
+            listItem.className = `p-4 bg-gray-50 rounded-lg shadow-sm flex items-center transition-all duration-200 hover:bg-gray-100 cursor-pointer px-1 sm:px-4`;
+
+            // Tambahkan kotak centang untuk multi-pilih
+            const multiSelectCheckbox = document.createElement('input');
+            multiSelectCheckbox.type = 'checkbox';
+            multiSelectCheckbox.className = 'transaction-select-checkbox h-4 w-4 rounded mr-1 sm:mr-4'; // Mengurangi ukuran dan margin pada mobile
+            multiSelectCheckbox.checked = selectedTransactions.includes(transactionData.id);
+            multiSelectCheckbox.dataset.transactionId = transactionData.id;
+            multiSelectCheckbox.addEventListener('change', handleTransactionCheckboxChange);
+            listItem.appendChild(multiSelectCheckbox);
+
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'flex-1';
+            // Mengurangi ukuran font untuk deskripsi dan tanggal di mobile
+            contentDiv.innerHTML = `
+                <p class="text-xs sm:text-lg font-semibold text-gray-800">${transactionData.description}</p>
+                <p class="text-[0.65rem] sm:text-sm text-gray-500">${getReadableDate(transactionData.date)}</p>
+            `;
+            listItem.appendChild(contentDiv);
+
+            const amountDiv = document.createElement('div');
+            // Mengurangi ukuran font untuk jumlah di mobile
+            amountDiv.className = `text-xs sm:text-lg font-bold ${typeClass}`;
+            amountDiv.textContent = `${sign} ${formatRupiah(transactionData.amount).replace('Rp', '')}`;
+            listItem.appendChild(amountDiv);
+
+            const buttonContainer = document.createElement('div');
+            // Mengurangi margin-left pada mobile, dan menggunakan flex-col untuk tombol edit/hapus
+            // agar mereka tidak terlalu banyak memakan ruang horizontal
+            buttonContainer.className = 'flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2 ml-1 sm:ml-4'; 
+
+            const editButton = document.createElement('button');
+            editButton.textContent = 'Edit';
+            // Mengurangi padding dan font size
+            editButton.className = 'edit-transaction-button bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-0.5 px-1.5 rounded-md text-[0.6rem] sm:text-sm';
+            editButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Mencegah klik listItem
+                showAddEditTransactionModal(transactionData.id);
+            });
+            buttonContainer.appendChild(editButton);
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Hapus';
+            // Mengurangi padding dan font size
+            deleteButton.className = 'delete-transaction-button bg-red-500 hover:bg-red-600 text-white font-medium py-0.5 px-1.5 rounded-md text-[0.6rem] sm:text-sm';
+            deleteButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Mencegah klik listItem
+                deleteTransactionFromFirestore(transactionData.id);
+            });
+            buttonContainer.appendChild(deleteButton);
+
+            listItem.appendChild(buttonContainer);
+
+            return listItem;
+        }
+
+        /**
+         * Menampilkan modal tambah/edit transaksi.
+         * @param {string|null} transactionId - ID transaksi yang akan diedit, atau null jika menambah baru.
+         */
+        function showAddEditTransactionModal(transactionId = null) {
+            if (!currentUser) {
+                showMessage('Silakan login untuk menambah atau mengedit transaksi.', 'error');
+                return;
+            }
+
+            editingTransactionId = transactionId;
+            transactionAmountInput.value = '';
+            transactionDescriptionInput.value = '';
+            transactionDateInput.value = new Date().toISOString().split('T')[0]; // Default ke hari ini
+
+            if (transactionId) {
+                transactionModalTitle.textContent = 'Edit Transaksi';
+                const transaction = budgetTransactions.find(t => t.id === transactionId);
+                if (transaction) {
+                    transactionTypeInput.value = transaction.type;
+                    transactionAmountInput.value = transaction.amount;
+                    transactionDescriptionInput.value = transaction.description;
+                    transactionDateInput.value = transaction.date;
+                }
+            } else {
+                transactionModalTitle.textContent = 'Tambah Transaksi';
+                transactionTypeInput.value = 'expense'; // Default ke pengeluaran untuk transaksi baru
+            }
+            addEditTransactionModal.classList.remove('hidden');
+            transactionAmountInput.focus();
+        }
+
+        /**
+         * Menyembunyikan modal tambah/edit transaksi.
+         */
+        function hideAddEditTransactionModal() {
+            addEditTransactionModal.classList.add('hidden');
+            editingTransactionId = null;
+        }
+
+        // --- Fungsi Ekspor ke Excel (.xlsx) ---
+
+        /**
+         * Menampilkan modal pemilihan rentang tanggal untuk ekspor.
+         */
+        function showExportBudgetModal() {
+            if (!currentUser || budgetTransactions.length === 0) {
+                showMessage('Tidak ada data atau Anda belum login untuk mengekspor.', 'error');
+                return;
+            }
+            // Mengatur tanggal default untuk modal (misalnya, bulan ini)
+            const today = new Date();
+            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+            exportStartDateInput.value = formatDateToYYYYMMDD(firstDayOfMonth);
+            exportEndDateInput.value = formatDateToYYYYMMDD(lastDayOfMonth);
+
+            exportBudgetModal.classList.remove('hidden');
+        }
+
+        /**
+         * Menyembunyikan modal pemilihan rentang tanggal untuk ekspor.
+         */
+        function hideExportBudgetModal() {
+            exportBudgetModal.classList.add('hidden');
+        }
+
+        /**
+         * Mengekspor transaksi ke file Excel (.xlsx) dengan pemformatan.
+         */
+        function exportTransactionsToXlsx() {
+            if (!currentUser) {
+                showMessage('Silakan login untuk mengekspor data.', 'error');
+                return;
+            }
+
+            const startDateString = exportStartDateInput.value;
+            const endDateString = exportEndDateInput.value;
+
+            if (!startDateString || !endDateString) {
+                showMessage('Harap pilih tanggal mulai dan tanggal akhir untuk ekspor!', 'error');
+                return;
+            }
+
+            const startDate = new Date(startDateString);
+            const endDate = new Date(endDateString);
+            endDate.setHours(23, 59, 59, 999); // Sertakan tanggal akhir sepenuhnya
+
+            if (startDate > endDate) {
+                showMessage('Tanggal mulai tidak boleh setelah tanggal akhir!', 'error');
+                return;
+            }
+
+            const filteredTransactions = budgetTransactions.filter(transaction => {
+                const transactionDate = new Date(transaction.date);
+                return transactionDate >= startDate && transactionDate <= endDate;
+            }).sort((a, b) => new Date(a.date) - new Date(b.date)); // Urutkan berdasarkan tanggal, terlama pertama
+
+            if (filteredTransactions.length === 0) {
+                showMessage('Tidak ada transaksi dalam rentang tanggal yang dipilih!', 'error');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new(); // Buat workbook baru
+            const ws = XLSX.utils.aoa_to_sheet([]); // Buat worksheet kosong baru
+
+            // Tambahkan judul laporan
+            XLSX.utils.sheet_add_aoa(ws, [["Laporan Penganggaran"]], { origin: "A1" });
+            XLSX.utils.sheet_add_aoa(ws, [[`Rentang Tanggal: ${getReadableDate(startDateString)} - ${getReadableDate(endDateString)}`]], { origin: "A2" });
+
+            // Hitung total pemasukan dan pengeluaran dalam rentang yang difilter
+            let totalIncome = 0;
+            let totalExpense = 0;
+            filteredTransactions.forEach(t => {
+                if (t.type === 'income') {
+                    totalIncome += t.amount;
+                } else {
+                    totalExpense += t.amount;
+                }
+            });
+
+            // Tambahkan total ringkasan
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["Saldo Saat Ini:", calculateBalance()], // Saldo saat ini dari semua transaksi di aplikasi
+                ["Total Pemasukan (dalam rentang ini):", totalIncome],
+                ["Total Pengeluaran (dalam rentang ini):", totalExpense]
+            ], { origin: "A4" });
+
+            // Terapkan gaya tebal dan format mata uang ke sel ringkasan
+            // Saldo Saat Ini
+            if (ws['A4']) ws['A4'].s = { font: { bold: true } };
+            if (ws['B4']) { ws['B4'].s = { font: { bold: true }, numFmt: 'Rp#,##0' }; ws['B4'].t = 'n'; } // Pastikan diperlakukan sebagai angka
+            // Total Pemasukan
+            if (ws['A5']) ws['A5'].s = { font: { bold: true } };
+            if (ws['B5']) { ws['B5'].s = { font: { bold: true }, numFmt: 'Rp#,##0' }; ws['B5'].t = 'n'; }
+            // Total Pengeluaran
+            if (ws['A6']) ws['A6'].s = { font: { bold: true } };
+            if (ws['B6']) { ws['B6'].s = { font: { bold: true }, numFmt: 'Rp#,##0' }; ws['B6'].t = 'n'; }
+
+
+            const headers = ["Tanggal", "Tipe", "Jumlah", "Deskripsi"];
+            let currentRow = 8; // Baris awal bagian konten transaksi
+
+            // Bagian Transaksi Pemasukan
+            const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
+            let incomeTitleRow = -1;
+            if (incomeTransactions.length > 0) {
+                incomeTitleRow = currentRow; // Tangkap baris judul pemasukan untuk merging
+                XLSX.utils.sheet_add_aoa(ws, [["Pemasukan"]], { origin: `A${currentRow}` });
+                if (ws[`A${currentRow}`]) ws[`A${currentRow}`].s = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: "E8F5E9" } } };
+                currentRow++;
+
+                XLSX.utils.sheet_add_aoa(ws, [headers], { origin: `A${currentRow}` });
+                for(let i=0; i<headers.length; i++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: currentRow -1, c: i });
+                    if(ws[cellRef]) ws[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: "D0F8D2" } } };
+                }
+                currentRow++;
+
+                const incomeData = incomeTransactions.map(t => [
+                    new Date(t.date),
+                    'Pemasukan',
+                    t.amount,
+                    t.description
+                ]);
+                XLSX.utils.sheet_add_aoa(ws, incomeData, { origin: `A${currentRow}` });
+                
+                // Terapkan format tanggal dan mata uang untuk data pemasukan
+                for (let i = 0; i < incomeData.length; i++) {
+                    const dataRow = currentRow + i;
+                    const dateCellRef = XLSX.utils.encode_cell({ r: dataRow - 1, c: 0 }); // Kolom A
+                    if (ws[dateCellRef]) {
+                        ws[dateCellRef].t = 'n';
+                        ws[dateCellRef].z = 'dd-mm-yyyy';
+                    }
+                    const amountCellRef = XLSX.utils.encode_cell({ r: dataRow - 1, c: 2 }); // Kolom C
+                    if (ws[amountCellRef]) {
+                        ws[amountCellRef].t = 'n';
+                        ws[amountCellRef].z = 'Rp#,##0';
+                    }
+                }
+                currentRow += incomeTransactions.length;
+            }
+
+            // Tambahkan baris kosong antara bagian hanya jika ada pemasukan dan pengeluaran
+            const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
+            if (incomeTransactions.length > 0 && expenseTransactions.length > 0) {
+                currentRow++;
+            }
+
+            // Bagian Transaksi Pengeluaran
+            let expenseTitleRow = -1;
+            if (expenseTransactions.length > 0) {
+                expenseTitleRow = currentRow; // Tangkap baris judul pengeluaran untuk merging
+                XLSX.utils.sheet_add_aoa(ws, [["Pengeluaran"]], { origin: `A${currentRow}` });
+                if (ws[`A${currentRow}`]) ws[`A${currentRow}`].s = { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: "FFEBEE" } } };
+                currentRow++;
+
+                XLSX.utils.sheet_add_aoa(ws, [headers], { origin: `A${currentRow}` });
+                for(let i=0; i<headers.length; i++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: currentRow -1, c: i });
+                    if(ws[cellRef]) ws[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: "FFCDD2" } } };
+                }
+                currentRow++;
+
+                // Membuat array data pengeluaran dengan penempatan kolom yang eksplisit
+                const expenseData = expenseTransactions.map(t => {
+                    const row = new Array(4); // Pastikan array memiliki ukuran 4 (untuk 4 kolom)
+                    row[0] = new Date(t.date);     // Tanggal (Kolom A)
+                    row[1] = 'Pengeluaran';        // Tipe (Kolom B)
+                    row[2] = t.amount;             // Jumlah (Kolom C)
+                    row[3] = t.description;        // Deskripsi (Kolom D)
+                    return row;
+                });
+
+                XLSX.utils.sheet_add_aoa(ws, expenseData, { origin: `A${currentRow}` });
+
+                // Terapkan format tanggal dan mata uang untuk data pengeluaran
+                for (let i = 0; i < expenseData.length; i++) {
+                    const dataRow = currentRow + i;
+                    const dateCellRef = XLSX.utils.encode_cell({ r: dataRow - 1, c: 0 }); // Kolom A
+                    if (ws[dateCellRef]) {
+                        ws[dateCellRef].t = 'n';
+                        ws[dateCellRef].z = 'dd-mm-yyyy';
+                    }
+                    const amountCellRef = XLSX.utils.encode_cell({ r: dataRow - 1, c: 2 }); // Kolom C
+                    if (ws[amountCellRef]) {
+                        ws[amountCellRef].t = 'n';
+                        ws[amountCellRef].z = 'Rp#,##0';
+                    }
+                }
+                currentRow += expenseTransactions.length;
+            }
+
+            // Mengatur lebar kolom untuk keterbacaan yang lebih baik
+            ws['!cols'] = [
+                { wch: 15 }, // Tanggal
+                { wch: 12 }, // Tipe
+                { wch: 15 }, // Jumlah
+                { wch: 40 }  // Deskripsi
+            ];
+
+            // Gabungkan sel untuk judul laporan dan rentang tanggal
+            if (!ws['!merges']) ws['!merges'] = [];
+            ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }); // Judul Laporan (A1)
+            ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } }); // Rentang Tanggal (A2)
+
+            // Gabungkan sel untuk judul bagian Pemasukan
+            if (incomeTitleRow !== -1) {
+                ws['!merges'].push({ s: { r: incomeTitleRow - 1, c: 0 }, e: { r: incomeTitleRow - 1, c: headers.length - 1 } });
+            }
+            // Gabungkan sel untuk judul bagian Pengeluaran
+            if (expenseTitleRow !== -1) {
+                ws['!merges'].push({ s: { r: expenseTitleRow - 1, c: 0 }, e: { r: expenseTitleRow - 1, c: headers.length - 1 } });
+            }
+
+
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan Anggaran");
+
+            const fileName = `laporan_anggaran_${startDateString}_${endDateString}.xlsx`;
+            XLSX.writeFile(wb, fileName); // Ini akan memicu dialog "Simpan Sebagai" di browser
+
+            showMessage('Data berhasil diekspor ke file Excel (.xlsx)!', 'success');
+            hideExportBudgetModal();
+        }
+
+
+        // --- Event Listeners ---
+        
+        transactionAmountInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                confirmTransactionButton.click();
+            }
+        });
+        transactionDescriptionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                confirmTransactionButton.click();
+            }
+        });
+
+        // Tombol & Modal Transaksi
+        addTransactionButton.addEventListener('click', () => showAddEditTransactionModal());
+        cancelTransactionButton.addEventListener('click', hideAddEditTransactionModal);
+        confirmTransactionButton.addEventListener('click', saveTransactionToFirestore); // Changed to Firestore save
+
+        // Listener Multi-pilih/Hapus Anggaran
+        if (selectAllTransactionsCheckbox) {
+            selectAllTransactionsCheckbox.addEventListener('change', (e) => toggleAllTransactions(e.target.checked));
+        }
+        if (deleteSelectedTransactionsButton) {
+            deleteSelectedTransactionsButton.addEventListener('click', deleteSelectedTransactionsFromFirestore); // Changed to Firestore delete
+        }
+
+        // Listener input pencarian
+        transactionSearchInput.addEventListener('input', renderBudget);
+
+        // Listener fitur ekspor
+        exportBudgetButton.addEventListener('click', showExportBudgetModal);
+        cancelExportButton.addEventListener('click', hideExportBudgetModal);
+        confirmExportButton.addEventListener('click', exportTransactionsToXlsx);
+
+        // Auth Event Listeners
+        loginButton.addEventListener('click', signInWithGoogle);
+        logoutButton.addEventListener('click', signOutUser);
+
+        // Listen for auth state changes
+        onAuthStateChanged(auth, async (user) => {
+            if (typeof __initial_auth_token !== 'undefined') {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    handleAuthStateChanged(user);
+                } catch (error) {
+                    console.error("Error signing in with custom token:", error);
+                    // Fallback to anonymous or just handle auth state
+                    handleAuthStateChanged(user);
+                }
+            } else {
+                // If no custom token, sign in anonymously if no user is logged in
+                if (!user) {
+                    await signInAnonymously(auth);
+                }
+                handleAuthStateChanged(user);
+            }
+        });
+        
+        // --- Fungsi Inisialisasi Aplikasi ---
+        function initApp() {
+            // Initial render based on current auth state (handled by onAuthStateChanged)
+            // No need for loadDataFromLocalStorage anymore
+        }
+
+        // Panggil initApp saat halaman dimuat
+        window.onload = initApp;
+    </script>
+</body>
+</html>
